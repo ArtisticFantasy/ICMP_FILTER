@@ -102,19 +102,18 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         new_credit = old_credit;
     }
 
-    if (new_credit < consume) {
-        drop = 1;
-    }
-
     if (__sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp) == old_stamp) {
-        if (__sync_val_compare_and_swap(&entry->credit, old_credit, new_credit - (drop ? 0 : consume)) == old_credit) {
-            goto finish;
+        new_credit = __sync_add_and_fetch(&entry->credit, new_credit - old_credit);
+        if (new_credit > 1000) {
+            __sync_sub_and_fetch(&entry->credit, new_credit - 1000);
         }
     }
 
     if (__sync_sub_and_fetch(&entry->credit, consume) < 0) {
         drop = 1;
         __sync_add_and_fetch(&entry->credit, consume);
+    } else {
+        bpf_printk("consume: %u\n", consume);
     }
 
 finish: 
