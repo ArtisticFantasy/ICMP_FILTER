@@ -10,6 +10,7 @@
 #define ONE_SECOND 1000000000
 struct perdst_entry {
     long long credit;
+    __u64 accum;
     __u64 stamp;
 };
 
@@ -77,6 +78,7 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     if (!entry) {
         struct perdst_entry new_entry = {
             .credit = 1000,
+            .accum = 0,
             .stamp = cur_stamp,
         };
         bpf_map_update_elem(&icmp_map, &hash, &new_entry, BPF_ANY);
@@ -85,27 +87,23 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     
     __u64 old_stamp, new_stamp;
     __u64 diff;
-    long long old_credit, new_credit;
     __u8 drop = 0;
     __u32 consume = bpf_get_prandom_u32() % 2 + 1;
     old_stamp = entry->stamp;
-    old_credit = entry->credit;
-
     diff = cur_stamp > old_stamp ? cur_stamp - old_stamp : ONE_SECOND;
     new_stamp = cur_stamp;
-    diff = mymin64(ONE_SECOND, diff);
-
-    if (diff >= ONE_SECOND / 2) {
-        new_credit = mymin64(1000, old_credit + (int)(1000 * diff / ONE_SECOND));
-    }
-    else {
-        new_credit = old_credit;
-    }
-
     if (__sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp) == old_stamp) {
-        new_credit = __sync_add_and_fetch(&entry->credit, new_credit - old_credit);
-        if (new_credit > 1000) {
-            __sync_sub_and_fetch(&entry->credit, new_credit - 1000);
+        __u64 accum = __sync_add_and_fetch(&entry->accum, new_stamp - old_stamp);
+        if (accum >= 0.2 * ONE_SECOND) {
+            accum = __sync_sub_and_fetch(&entry->accum, 0.2 * ONE_SECOND);
+            if (accum < 0) {
+                __sync_add_and_fetch(&entry->accum, 0.2 * ONE_SECOND);
+            } else {
+                long long credit = __sync_add_and_fetch(&entry->credit, 200);
+                if (credit > 1000) {
+                    __sync_sub_and_fetch(&entry->credit, credit - 1000);
+                }
+            }
         }
     }
 
