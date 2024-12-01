@@ -9,9 +9,11 @@
 
 #define ONE_SECOND 1000000000
 struct perdst_entry {
-    int credit;
+    long long credit;
     __u64 stamp;
 };
+
+static 
 
 __u64 mymin64(__u64 a, __u64 b) {
     return a < b ? a : b;
@@ -34,13 +36,6 @@ struct {
     __type(value, __u32);
     __uint(max_entries, 1);
 } hash_key SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u32);
-    __type(value, struct bpf_spin_lock);
-    __uint(max_entries, 1);
-} my_lock SEC(".maps");
 
 __u32 hash_calc (__u32 ip) {
     __u32 x = 0;
@@ -70,12 +65,14 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     if (bpf_probe_read_kernel(&icmph, sizeof(icmph), skb->head + skb->network_header + sizeof(iph)) < 0) {
         return NF_ACCEPT;
     }
-    __u32 x = 0;
-    struct bpf_spin_lock* lock = bpf_map_lookup_elem(&my_lock, &x);
-    bpf_spin_lock(lock);
 
     __u64 cur_stamp = bpf_ktime_get_ns();
     __u32 hash = hash_calc(iph.daddr);
+
+    if (hash >= 2048 ) {
+        hash = 0;
+    }
+
     struct perdst_entry *entry = bpf_map_lookup_elem(&icmp_map, &hash);
     if (!entry) {
         struct perdst_entry new_entry = {
@@ -86,33 +83,34 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         entry = &new_entry;
     }
     
+    __u64 old_stamp, new_stamp;
     __u64 diff;
-    if (entry->stamp > cur_stamp) {
-        diff = ONE_SECOND;
-    }
-    else diff = cur_stamp - entry->stamp;
-
-    entry->stamp = cur_stamp;
-
-    diff = mymin64(ONE_SECOND, diff);
-
-    if (diff >= ONE_SECOND / 2) {
-        entry->credit = mymin32(1000, entry->credit + (int)(1000 * diff / ONE_SECOND));
-    }
-
-    __u32 consume = bpf_get_prandom_u32() % 2 + 1;
+    long long old_credit, new_credit;
     __u8 drop = 0;
+    __u32 consume = bpf_get_prandom_u32() % 2 + 1;
+    do {
+        old_stamp = entry->stamp;
+        old_credit = entry->credit;
 
-    if (entry->credit < consume) {
-        drop = 1;
+        diff = cur_stamp > old_stamp ? cur_stamp - old_stamp : ONE_SECOND;
+        new_stamp = cur_stamp;
+        diff = mymin64(ONE_SECOND, diff);
+
+        if (diff >= ONE_SECOND / 2) {
+            new_credit = mymin64(1000, old_credit + (int)(1000 * diff / ONE_SECOND));
+        }
+        else {
+            new_credit = old_credit;
+        }
+
+        if (new_credit < consume) {
+            drop = 1;
+            break;
+        }
     }
-    else {
-        entry->credit -= consume;
-    }
-
-    bpf_map_update_elem(&icmp_map, &hash, entry, BPF_ANY);
-
-    bpf_spin_unlock(lock);  
+    while (__sync_val_compare_and_swap(&entry->credit, old_credit, new_credit - consume) != old_credit);
+    __sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp);
+    
 
     if (drop) {
         bpf_trace_printk("Dropped an ICMP packet according to rate limit!\n", sizeof("Dropped an ICMP packet according to rate limit!\n"));
