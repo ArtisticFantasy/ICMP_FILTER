@@ -22,18 +22,42 @@ __u32 mymin32(__u32 a, __u32 b) {
 }
 
 struct {
-	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, __u32);
 	__type(value, struct perdst_entry);
-	__uint(max_entries, 1000);
+	__uint(max_entries, 2048);
 } icmp_map SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, __u32);
+    __type(value, __u32);
+    __uint(max_entries, 1);
+} hash_key SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, __u32);
+    __type(value, struct bpf_spin_lock);
+    __uint(max_entries, 1);
+} my_lock SEC(".maps");
+
+__u32 hash_calc (__u32 ip) {
+    __u32 x = 0;
+    __u32* key = bpf_map_lookup_elem(&hash_key, &x);
+    if (!key) {
+        *key = bpf_get_prandom_u32();
+        bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
+    }
+    return (ip ^ *key) % 2048;
+}
 
 /*NF_INET_LOCAL_IN*/
 SEC("netfilter")
 int icmp_filter(struct bpf_nf_ctx *ctx) {
     struct sk_buff *skb = ctx->skb;
     struct iphdr iph, inner_iph;
-    struct icmphdr icmph;
+    struct icmphdr icmph, inner_icmph;
 
     if (bpf_probe_read_kernel(&iph, sizeof(iph), skb->head + skb->network_header) < 0) {
         return NF_ACCEPT;
@@ -46,15 +70,19 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     if (bpf_probe_read_kernel(&icmph, sizeof(icmph), skb->head + skb->network_header + sizeof(iph)) < 0) {
         return NF_ACCEPT;
     }
+    __u32 x = 0;
+    struct bpf_spin_lock* lock = bpf_map_lookup_elem(&my_lock, &x);
+    bpf_spin_lock(lock);
 
     __u64 cur_stamp = bpf_ktime_get_ns();
-    struct perdst_entry *entry = bpf_map_lookup_elem(&icmp_map, &iph.daddr);
+    __u32 hash = hash_calc(iph.daddr);
+    struct perdst_entry *entry = bpf_map_lookup_elem(&icmp_map, &hash);
     if (!entry) {
         struct perdst_entry new_entry = {
             .credit = 1000,
             .stamp = cur_stamp,
         };
-        bpf_map_update_elem(&icmp_map, &iph.daddr, &new_entry, BPF_ANY);
+        bpf_map_update_elem(&icmp_map, &hash, &new_entry, BPF_ANY);
         entry = &new_entry;
     }
     
@@ -82,7 +110,9 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         entry->credit -= consume;
     }
 
-    bpf_map_update_elem(&icmp_map, &iph.daddr, entry, BPF_ANY);    
+    bpf_map_update_elem(&icmp_map, &hash, entry, BPF_ANY);
+
+    bpf_spin_unlock(lock);  
 
     if (drop) {
         bpf_trace_printk("Dropped an ICMP packet according to rate limit!\n", sizeof("Dropped an ICMP packet according to rate limit!\n"));
@@ -98,13 +128,21 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         return NF_ACCEPT;
     }
 
-    if (inner_iph.protocol == IPPROTO_UDP || inner_iph.protocol == IPPROTO_ICMP) { //stateless protocol
-        if (icmph.type == ICMP_DEST_UNREACH && icmph.code == ICMP_FRAG_NEEDED) {
-          bpf_trace_printk("Dropped an ICMP_FRAG_NEEDED packet!\n", sizeof("Dropped an ICMP_FRAG_NEEDED packet!\n"));
-        } else {
-          bpf_trace_printk("Dropped an ICMP_REDIRECT packet!\n", sizeof("Dropped an ICMP_REDIRECT packet!\n"));
+    if (icmph.type == ICMP_REDIRECT) {
+        if (inner_iph.protocol == IPPROTO_UDP || inner_iph.protocol == IPPROTO_ICMP) {
+            bpf_trace_printk("Dropped an ICMP_REDIRECT packet!\n", sizeof("Dropped an ICMP_REDIRECT packet!\n"));
+            return NF_DROP;
         }
-        return NF_DROP;
+    } else {
+        if (inner_iph.protocol == IPPROTO_ICMP) {
+            if (bpf_probe_read_kernel(&inner_icmph, sizeof(inner_icmph), skb->head + skb->network_header + sizeof(iph) + sizeof(icmph) + sizeof(inner_iph)) < 0) {
+                return NF_ACCEPT;
+            }
+            if (inner_icmph.type == ICMP_ECHOREPLY) {
+                bpf_trace_printk("Dropped an ICMP_REDIRECT packet!\n", sizeof("Dropped an ICMP_REDIRECT packet!\n"));
+                return NF_DROP;
+            }
+        }
     }
 
     return NF_ACCEPT;
