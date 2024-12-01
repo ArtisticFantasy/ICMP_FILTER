@@ -41,7 +41,8 @@ __u32 hash_calc (__u32 ip) {
     __u32 x = 0;
     __u32* key = bpf_map_lookup_elem(&hash_key, &x);
     if (!key) {
-        *key = bpf_get_prandom_u32();
+        __u32 tmp = bpf_get_prandom_u32();
+        key = &tmp;
         bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
     }
     return (ip ^ *key) % 2048;
@@ -88,30 +89,36 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     long long old_credit, new_credit;
     __u8 drop = 0;
     __u32 consume = bpf_get_prandom_u32() % 2 + 1;
-    do {
-        old_stamp = entry->stamp;
-        old_credit = entry->credit;
+    old_stamp = entry->stamp;
+    old_credit = entry->credit;
 
-        diff = cur_stamp > old_stamp ? cur_stamp - old_stamp : ONE_SECOND;
-        new_stamp = cur_stamp;
-        diff = mymin64(ONE_SECOND, diff);
+    diff = cur_stamp > old_stamp ? cur_stamp - old_stamp : ONE_SECOND;
+    new_stamp = cur_stamp;
+    diff = mymin64(ONE_SECOND, diff);
 
-        if (diff >= ONE_SECOND / 2) {
-            new_credit = mymin64(1000, old_credit + (int)(1000 * diff / ONE_SECOND));
-        }
-        else {
-            new_credit = old_credit;
-        }
+    if (diff >= ONE_SECOND / 2) {
+        new_credit = mymin64(1000, old_credit + (int)(1000 * diff / ONE_SECOND));
+    }
+    else {
+        new_credit = old_credit;
+    }
 
-        if (new_credit < consume) {
-            drop = 1;
-            break;
+    if (new_credit < consume) {
+        drop = 1;
+    }
+
+    if (__sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp) == old_stamp) {
+        if (__sync_val_compare_and_swap(&entry->credit, old_credit, new_credit - (drop ? 0 : consume)) == old_credit) {
+            goto finish;
         }
     }
-    while (__sync_val_compare_and_swap(&entry->credit, old_credit, new_credit - consume) != old_credit);
-    __sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp);
-    
 
+    if (__sync_sub_and_fetch(&entry->credit, consume) < 0) {
+        drop = 1;
+        __sync_add_and_fetch(&entry->credit, consume);
+    }
+
+finish:
     if (drop) {
         bpf_trace_printk("Dropped an ICMP packet according to rate limit!\n", sizeof("Dropped an ICMP packet according to rate limit!\n"));
         return NF_DROP;
