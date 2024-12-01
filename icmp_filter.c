@@ -13,8 +13,6 @@ struct perdst_entry {
     __u64 stamp;
 };
 
-static 
-
 __u64 mymin64(__u64 a, __u64 b) {
     return a < b ? a : b;
 }
@@ -45,6 +43,7 @@ __u32 hash_calc (__u32 ip) {
         key = &tmp;
         bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
     }
+    bpf_trace_printk("hash key: %u\n", *key);
     return (ip ^ *key) % 2048;
 }
 
@@ -117,6 +116,8 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         drop = 1;
         __sync_add_and_fetch(&entry->credit, consume);
     }
+
+    bpf_trace_printk("hash value: %u credit: %lld\n", hash, entry->credit);
 
 finish:
     if (drop) {
