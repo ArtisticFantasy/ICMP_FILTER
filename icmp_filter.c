@@ -94,8 +94,8 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     new_stamp = cur_stamp;
     if (__sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp) == old_stamp) {
         __u64 accum = __sync_add_and_fetch(&entry->accum, new_stamp - old_stamp);
-        if (accum >= 0.5 * ONE_SECOND) {
-            if (__sync_val_compare_and_swap(&entry->accum, accum, accum - 0.5 * ONE_SECOND) == accum) {
+        if (accum >= ONE_SECOND / 2) {
+            if (__sync_val_compare_and_swap(&entry->accum, accum, accum - ONE_SECOND / 2) == accum) {
                 long long credit = __sync_add_and_fetch(&entry->credit, 500);
                 if (credit > 1000) {
                     __sync_sub_and_fetch(&entry->credit, credit - 1000);
