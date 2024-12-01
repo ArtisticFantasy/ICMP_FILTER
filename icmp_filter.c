@@ -43,7 +43,7 @@ __u32 hash_calc (__u32 ip) {
         key = &tmp;
         bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
     }
-    bpf_trace_printk("hash key: %u\n", *key);
+    bpf_printk("hash key: %u\n", *key);
     return (ip ^ *key) % 2048;
 }
 
@@ -117,9 +117,9 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
         __sync_add_and_fetch(&entry->credit, consume);
     }
 
-    bpf_trace_printk("hash value: %u credit: %lld\n", hash, entry->credit);
+finish: 
+    bpf_printk("hash value: %u credit: %lld\n", hash, entry->credit);
 
-finish:
     if (drop) {
         bpf_trace_printk("Dropped an ICMP packet according to rate limit!\n", sizeof("Dropped an ICMP packet according to rate limit!\n"));
         return NF_DROP;
