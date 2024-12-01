@@ -68,7 +68,7 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     }
 
     __u64 cur_stamp = bpf_ktime_get_ns();
-    __u32 hash = hash_calc(iph.daddr);
+    __u32 hash = hash_calc(iph.saddr);
 
     if (hash >= 2048 ) {
         hash = 0;
@@ -86,14 +86,12 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     }
     
     __u64 old_stamp, new_stamp;
-    __u64 diff;
     __u8 drop = 0;
     __u32 consume = bpf_get_prandom_u32() % 2 + 1;
     old_stamp = entry->stamp;
-    diff = cur_stamp > old_stamp ? cur_stamp - old_stamp : ONE_SECOND;
     new_stamp = cur_stamp;
     if (__sync_val_compare_and_swap(&entry->stamp, old_stamp, new_stamp) == old_stamp) {
-        __u64 accum = __sync_add_and_fetch(&entry->accum, new_stamp - old_stamp);
+        __u64 accum = __sync_add_and_fetch(&entry->accum, mymin64(1000, new_stamp - old_stamp));
         if (accum >= ONE_SECOND / 2) {
             if (__sync_val_compare_and_swap(&entry->accum, accum, mymin64(ONE_SECOND / 2, accum - ONE_SECOND / 2)) == accum) {
                 long long credit = __sync_add_and_fetch(&entry->credit, 500);

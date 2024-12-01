@@ -5,9 +5,17 @@
 #include <linux/bpf.h>
 #include <linux/netfilter.h>
 #include <linux/if_link.h>
+#include <bpf/bpf.h>
 #include <unistd.h>
+#include <time.h>
 
 #define PATH_MAX 4096
+
+struct perdst_entry {
+    long long credit;
+    __u64 accum;
+    __u64 stamp;
+};
 
 int main(int argc, char **argv) {
     struct bpf_object *obj;
@@ -34,6 +42,42 @@ int main(int argc, char **argv) {
     if (!prog) {
         fprintf(stderr, "ERROR: finding a program in BPF object file failed\n");
         return 1;
+    }
+
+    int map_fd = bpf_object__find_map_fd_by_name(obj, "hash_key");
+    if (map_fd < 0) {
+        fprintf(stderr, "ERROR: finding hash_key in BPF object file failed\n");
+        return 1;
+    }
+
+    srand(time(0));
+
+    __u32 key = 0;
+    __u32 value = random();
+    ret = bpf_map_update_elem(map_fd, &key, &value, BPF_ANY);
+    if (ret) {
+        fprintf(stderr, "ERROR: updating map in BPF object file failed\n");
+        return 1;
+    }
+    printf("Set hash key: %u\n", value);
+
+    map_fd = bpf_object__find_map_fd_by_name(obj, "icmp_map");
+    if (map_fd < 0) {
+        fprintf(stderr, "ERROR: finding icmp_map in BPF object file failed\n");
+        return 1;
+    }
+
+    for (int i = 0; i < 2048; ++i) {
+        struct perdst_entry entry = {
+            .credit = 500,
+            .accum = 0,
+            .stamp = 0,
+        };
+        ret = bpf_map_update_elem(map_fd, &i, &entry, BPF_ANY);
+        if (ret) {
+            fprintf(stderr, "ERROR: updating map in BPF object file failed\n");
+            return 1;
+        }
     }
 
     struct bpf_netfilter_opts opts = {
