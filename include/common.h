@@ -1,27 +1,3 @@
-enum {
-	NFPROTO_UNSPEC =  0,
-	NFPROTO_INET   =  1,
-	NFPROTO_IPV4   =  2,
-	NFPROTO_ARP    =  3,
-	NFPROTO_NETDEV =  5,
-	NFPROTO_BRIDGE =  7,
-	NFPROTO_IPV6   = 10,
-#ifndef __KERNEL__ /* no longer supported by kernel */
-	NFPROTO_DECNET = 12,
-#endif
-	NFPROTO_NUMPROTO,
-};
-
-enum nf_inet_hooks {
-	NF_INET_PRE_ROUTING,
-	NF_INET_LOCAL_IN,
-	NF_INET_FORWARD,
-	NF_INET_LOCAL_OUT,
-	NF_INET_POST_ROUTING,
-	NF_INET_NUMHOOKS,
-	NF_INET_INGRESS = NF_INET_NUMHOOKS,
-};
-
 /* Responses from hook functions. */
 #define NF_DROP 0
 #define NF_ACCEPT 1

@@ -49,7 +49,7 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     struct iphdr iph, inner_iph;
     struct icmphdr icmph, inner_icmph;
 
-    if (ctx->state.pf != NFPROTO_IPV4) {
+    if (ctx->state->pf != NFPROTO_IPV4) {
         return NF_ACCEPT;
     }
 
@@ -66,7 +66,7 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     }
 
     __u64 cur_stamp = bpf_ktime_get_ns();
-    __u32 hash = hash_calc(ntohl(iph.saddr) & 0xFFFFFF00);
+    __u32 hash = hash_calc(bpf_ntohl(iph.saddr) & 0xFFFFFF00);
 
     if (hash >= 2048) {
         hash = 0;
