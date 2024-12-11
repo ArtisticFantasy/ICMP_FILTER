@@ -40,8 +40,16 @@ __u32 hash_calc (__u32 ip) {
         key = &tmp;
         bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
     }
-    //bpf_printk("hash key: %u\n", *key);
     return (ip ^ *key) % 2048;
+}
+
+void ipv4_to_string(char *buf, __u32 ip) {
+    int a = (ip >> 24) & 0xFF;
+    int b = (ip >> 16) & 0xFF;
+    int c = (ip >> 8) & 0xFF;
+    int d = ip & 0xFF;
+
+    bpf_snprintf(buf, 16, "%d.%d.%d.%d", a, b, c, d);
 }
 
 SEC("netfilter")
@@ -68,6 +76,9 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
 
     __u64 cur_stamp = bpf_ktime_get_ns();
     __u32 hash = hash_calc(bpf_ntohl(iph.saddr) & 0xFFFFFF00);
+
+    char buf[20] = {0};
+    ipv4_to_string(buf, bpf_ntohl(iph.saddr));
 
     if (hash >= 2048) {
         hash = 0;
@@ -104,15 +115,11 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     if (__sync_sub_and_fetch(&entry->credit, consume) < 0) {
         drop = 1;
         __sync_add_and_fetch(&entry->credit, consume);
-    } else {
-        bpf_printk("consume: %u\n", consume);
     }
 
 finish: 
-    bpf_printk("hash value: %u credit: %lld\n", hash, entry->credit);
-
     if (drop) {
-        bpf_trace_printk("Dropped an ICMP packet according to rate limit!\n", sizeof("Dropped an ICMP packet according to rate limit!\n"));
+        bpf_printk("[ICMP Filter] Dropped an ICMP packet from %s according to rate limit!\n", buf);
         return NF_DROP;
     }
 
@@ -127,7 +134,7 @@ finish:
 
     if (icmph.type == ICMP_REDIRECT) {
         if (inner_iph.protocol == IPPROTO_UDP || inner_iph.protocol == IPPROTO_ICMP) {
-            bpf_trace_printk("Dropped an ICMP_REDIRECT packet!\n", sizeof("Dropped an ICMP_REDIRECT packet!\n"));
+            bpf_printk("[ICMP Filter] Dropped an ICMP_REDIRECT packet from %s!\n", buf);
             return NF_DROP;
         }
     } else {
@@ -136,7 +143,7 @@ finish:
                 return NF_ACCEPT;
             }
             if (inner_icmph.type == ICMP_ECHOREPLY || inner_icmph.type == ICMP_DEST_UNREACH || inner_icmph.type == ICMP_REDIRECT) {
-                bpf_trace_printk("Dropped an ICMP_REDIRECT packet!\n", sizeof("Dropped an ICMP_REDIRECT packet!\n"));
+                bpf_printk("[ICMP Filter] Dropped an ICMP_REDIRECT packet from %s!\n", buf);
                 return NF_DROP;
             }
         }
