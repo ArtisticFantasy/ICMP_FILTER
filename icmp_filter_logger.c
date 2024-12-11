@@ -69,22 +69,21 @@ int main() {
         return 1;
     }
 
-    pb = perf_buffer__new(map_fd, 8, handle_event, NULL, NULL, NULL);
-    if (!pb) {
-        fprintf(stderr, "Failed to create perf buffer\n");
-        bpf_object__close(obj);
+    rb = ring_buffer__new(map_fd, handle_event, NULL, NULL);
+    if (!rb) {
+        fprintf(stderr, "Failed to create ring buffer\n");
         return 1;
     }
 
     while (1) {
-        int ret = perf_buffer__poll(pb, 100);
+        int ret = ring_buffer__poll(rb, 100);
         if (ret < 0) {
-            fprintf(stderr, "Error polling perf buffer: %d\n", ret);
+            fprintf(stderr, "Error polling ring buffer: %d\n", ret);
             break;
         }
     }
 
-    perf_buffer__free(pb);
+    ring_buffer__free(rb);
     bpf_object__close(obj);
     return 0;
 }

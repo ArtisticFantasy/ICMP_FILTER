@@ -39,9 +39,8 @@ struct {
 } hash_key SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(key_size, sizeof(__u32));
-    __uint(value_size, sizeof(__u32));
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 20);
 } log_map SEC(".maps");
 
 __u32 hash_calc (__u32 ip) {
@@ -136,7 +135,7 @@ finish:
             .timestamp = cur_stamp,
         };
         bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
-        bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
+        bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
         bpf_printk("[ICMP Filter] Dropped an ICMP packet from %s according to rate limit!\n", buf);
         return NF_DROP;
     }
@@ -157,7 +156,7 @@ finish:
                 .timestamp = cur_stamp,
             };
             bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
-            bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
+            bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
             bpf_printk("[ICMP Filter] Dropped an ICMP Redirect packet from %s!\n", buf);
             return NF_DROP;
         }
@@ -172,7 +171,7 @@ finish:
                     .timestamp = cur_stamp,
                 };
                 bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
-                bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
+                bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
                 bpf_printk("[ICMP Filter] Dropped an ICMP Fragment Needed packet from %s!\n", buf);
                 return NF_DROP;
             }
