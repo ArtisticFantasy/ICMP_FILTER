@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    int err = bpf_obj_pin(map_fd, "/sys/fs/bpf/icmp_filter_log_map");
+    int err = bpf_obj_pin(log_map_fd, "/sys/fs/bpf/icmp_filter_log_map");
     if (err) {
         fprintf(stderr, "ERROR: pinning log_map failed\n");
         bpf_object__close(obj);
