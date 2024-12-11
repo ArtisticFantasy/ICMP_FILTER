@@ -1,18 +1,34 @@
-all: icmp_filter_loader
+CC := clang
+BPF_CFLAGS := -O2 -target bpf -g -c -Iinclude
+LOADER_LDFLAGS := -lbpf
+BPF_LOADER := icmp_filter_loader
+BPF_PROG := icmp_filter
 
-icmp_filter_loader: icmp_filter_loader.c icmp_filter.o
-	gcc -o icmp_filter_loader icmp_filter_loader.c -lbpf
+INT_FILES := $(BPF_LOADER) $(BPF_PROG).o
 
-icmp_filter.o: icmp_filter.c common.h
-	clang -O2 -target bpf -g -c icmp_filter.c -o icmp_filter.o -I/usr/include/$(shell gcc -dumpmachine)
+.PHONY: all clean load unload
+
+all: $(BPF_LOADER)
+
+$(BPF_LOADER): $(BPF_LOADER).c $(BPF_PROG).o
+	$(CC) -o $@ $< $(LOADER_LDFLAGS)
+
+$(BPF_PROG).o: $(BPF_PROG).c
+	@if ! test -f include/vmlinux.h; then \
+		bpftool btf dump file /sys/kernel/btf/vmlinux format c > include/vmlinux.h || exit 1; \
+	fi
+	$(CC) $(BPF_CFLAGS) -o $@ $^
 
 clean:
-	rm -f icmp_filter_loader icmp_filter.o
+	rm -f $(INT_FILES)
 
-load: icmp_filter_loader
-	sudo ./icmp_filter_loader
-	touch loaded
+load: $(BPF_LOADER)
+	sudo ./$(BPF_LOADER)
 
-unload: loaded
-	sudo rm /sys/fs/bpf/icmp_filter_link
-	rm loaded
+unload:
+	@if sudo test -f /sys/fs/bpf/icmp_filter_link; then \
+		sudo rm /sys/fs/bpf/icmp_filter_link; \
+		echo "Unloaded successfully!"; \
+	else \
+		echo "Nothing to unload."; \
+	fi

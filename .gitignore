@@ -1,0 +1,8 @@
+.vscode/
+
+#vmlinux
+include/vmlinux.h
+
+#Intermediate files
+icmp_filter_loader
+icmp_filter.o

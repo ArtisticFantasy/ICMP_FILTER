@@ -1,11 +1,6 @@
-#include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/in.h>
-#include <linux/icmp.h>
-#include <linux/netfilter.h>
-#include <bpf/bpf_helpers.h>
+#include "vmlinux.h"
 #include "common.h"
+#include <bpf/bpf_helpers.h>
 
 #define ONE_SECOND 1000000000
 struct perdst_entry {
@@ -44,16 +39,19 @@ __u32 hash_calc (__u32 ip) {
         key = &tmp;
         bpf_map_update_elem(&hash_key, &x, key, BPF_ANY);
     }
-    bpf_printk("hash key: %u\n", *key);
+    //bpf_printk("hash key: %u\n", *key);
     return (ip ^ *key) % 2048;
 }
 
-/*NF_INET_LOCAL_IN*/
 SEC("netfilter")
 int icmp_filter(struct bpf_nf_ctx *ctx) {
     struct sk_buff *skb = ctx->skb;
     struct iphdr iph, inner_iph;
     struct icmphdr icmph, inner_icmph;
+
+    if (ctx->state.pf != NFPROTO_IPV4) {
+        return NF_ACCEPT;
+    }
 
     if (bpf_probe_read_kernel(&iph, sizeof(iph), skb->head + skb->network_header) < 0) {
         return NF_ACCEPT;
@@ -68,9 +66,9 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
     }
 
     __u64 cur_stamp = bpf_ktime_get_ns();
-    __u32 hash = hash_calc(iph.saddr);
+    __u32 hash = hash_calc(ntohl(iph.saddr) & 0xFFFFFF00);
 
-    if (hash >= 2048 ) {
+    if (hash >= 2048) {
         hash = 0;
     }
 
