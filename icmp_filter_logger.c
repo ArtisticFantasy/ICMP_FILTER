@@ -24,9 +24,20 @@ void print_log(struct log_event event) {
 
     time_t user_time_sec = event.timestamp / 1e9 + offset_sec;
 
-    struct tm *user_time_tm = localtime(&user_time_sec);
+    struct tm user_time_tm;
+    if (localtime_r(&user_time_sec, &user_time_tm) == NULL) {
+        perror("localtime_r");
+        return;
+    }
 
-    printf("[%s] ICMP Filter: ", asctime(user_time_tm));
+    char time_str[30];
+
+    if (strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &user_time_tm) == 0) {
+        fprintf(stderr, "strftime failed\n");
+        return;
+    }
+
+    printf("[%s] ICMP Filter: ", time_str);
     switch (event.type) {
         case 0:
             printf("Dropped an ICMP packet from %s according to rate limit!\n", event.ip);
