@@ -83,6 +83,20 @@ int main(int argc, char **argv) {
         }
     }
 
+    int log_map_fd = bpf_object__find_map_fd_by_name(obj, "log_map");
+    if (log_map_fd < 0) {
+        fprintf(stderr, "ERROR: finding log_map in BPF object file failed\n");
+        bpf_object__close(obj);
+        return 1;
+    }
+
+    int err = bpf_obj_pin(map_fd, "/sys/fs/bpf/icmp_filter_log_map");
+    if (err) {
+        fprintf(stderr, "ERROR: pinning log_map failed\n");
+        bpf_object__close(obj);
+        return 1;
+    }
+
     struct bpf_netfilter_opts opts = {
         .sz = sizeof(struct bpf_netfilter_opts),
         .pf = NFPROTO_IPV4,

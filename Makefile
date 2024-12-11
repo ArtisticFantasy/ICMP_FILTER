@@ -34,11 +34,16 @@ load: $(BPF_LOADER)
 
 unload:
 	@if sudo test -f /sys/fs/bpf/icmp_filter_link; then \
-		sudo rm /sys/fs/bpf/icmp_filter_link; \
+		sudo rm -f /sys/fs/bpf/icmp_filter_link; \
+		sudo rm -f /sys/fs/bpf/icmp_filter_log_map; \
 		echo "Unloaded successfully!"; \
 	else \
 		echo "Nothing to unload."; \
 	fi
 
 log: $(BPF_LOGGER)
+	@if ! sudo test -f /sys/fs/bpf/icmp_filter_log_map; then \
+		echo "No log map found!"; \
+		exit 1; \
+	fi
 	sudo ./$(BPF_LOGGER)

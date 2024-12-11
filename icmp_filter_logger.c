@@ -5,6 +5,7 @@
 #include <bpf/bpf.h>
 #include <time.h>
 #include <stdint.h>
+#include <errno.h>
 
 struct log_event {
     char ip[256];
@@ -47,24 +48,10 @@ int handle_event(void *ctx, void *data, size_t size) {
 int main() {
     struct ring_buffer *rb;
     struct bpf_object *obj;
-    int map_fd;
 
-    obj = bpf_object__open_file("icmp_filter.o", NULL);
-    if (libbpf_get_error(obj)) {
-        fprintf(stderr, "Failed to open eBPF object file\n");
-        return 1;
-    }
-
-    if (bpf_object__load(obj)) {
-        fprintf(stderr, "Failed to load eBPF object\n");
-        bpf_object__close(obj);
-        return 1;
-    }
-
-    map_fd = bpf_object__find_map_fd_by_name(obj, "log_map");
+    int map_fd = bpf_obj_get("/sys/fs/bpf/icmp_filter_log_map");
     if (map_fd < 0) {
-        fprintf(stderr, "Failed to find 'events' map\n");
-        bpf_object__close(obj);
+        fprintf(stderr, "Failed to open pinned map: %s\n", strerror(errno));
         return 1;
     }
 
