@@ -62,7 +62,7 @@ void ipv4_to_string(char *buf, __u32 ip) {
     int c = (ip >> 8) & 0xFF;
     int d = ip & 0xFF;
 
-    bpf_snprintf(buf, 16, "%d.%d.%d.%d", a, b, c, d);
+    BPF_SNPRINTF(buf, 16, "%d.%d.%d.%d", a, b, c, d);
 }
 
 SEC("netfilter")
