@@ -45,8 +45,7 @@ void handle_event(void *ctx, int cpu, void *data, __u32 size) {
 }
 
 int main() {
-    struct perf_buffer *pb;
-    struct perf_buffer_opts pb_opts = {};
+    struct ring_buffer *rb;
     struct bpf_object *obj;
     int map_fd;
 
