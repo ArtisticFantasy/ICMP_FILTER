@@ -1,7 +1,11 @@
 CC := clang
 BPF_CFLAGS := -O2 -target bpf -g -c -Iinclude
+LOADER_CFLAGS := -O2
+LOGGER_CFLAGS := -O2
 LOADER_LDFLAGS := -lbpf
+LOGGER_LDFLAGS := -lbpf
 BPF_LOADER := icmp_filter_loader
+BPF_LOGGER := icmp_filter_loader
 BPF_PROG := icmp_filter
 
 INT_FILES := $(BPF_LOADER) $(BPF_PROG).o
@@ -11,7 +15,10 @@ INT_FILES := $(BPF_LOADER) $(BPF_PROG).o
 all: $(BPF_LOADER)
 
 $(BPF_LOADER): $(BPF_LOADER).c $(BPF_PROG).o
-	$(CC) -o $@ $< $(LOADER_LDFLAGS)
+	$(CC) $(LOADER_CFLAGS) -o $@ $< $(LOADER_LDFLAGS)
+
+$(BPF_LOGGER): $(BPF_LOGGER).c $(BPF_PROG).o
+	$(CC) $(LOGGER_CFLAGS) -o $@ $< $(LOGGER_LDFLAGS)
 
 $(BPF_PROG).o: $(BPF_PROG).c
 	@if ! test -f include/vmlinux.h; then \

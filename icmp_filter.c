@@ -10,6 +10,13 @@ struct perdst_entry {
     __u64 stamp;
 };
 
+struct log_event {
+    __u32 pid;
+    char ip[256];
+    __u8 type;
+    __u64 timestamp;
+};
+
 __u64 mymin64(__u64 a, __u64 b) {
     return a < b ? a : b;
 }
@@ -31,6 +38,12 @@ struct {
     __type(value, __u32);
     __uint(max_entries, 1);
 } hash_key SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __type(key_size, sizeof(__u32));
+    __type(value_size, sizeof(__u32));
+} log_map SEC(".maps");
 
 __u32 hash_calc (__u32 ip) {
     __u32 x = 0;
@@ -119,6 +132,13 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
 
 finish: 
     if (drop) {
+        struct log_event event = {
+            .pid = bpf_get_current_pid_tgid() >> 32,
+            .type = 0,
+            .timestamp = cur_stamp,
+        };
+        bpf_probe_read_str(event.ip, sizeof(event.ip), buf);
+        bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
         bpf_printk("[ICMP Filter] Dropped an ICMP packet from %s according to rate limit!\n", buf);
         return NF_DROP;
     }
@@ -134,7 +154,14 @@ finish:
 
     if (icmph.type == ICMP_REDIRECT) {
         if (inner_iph.protocol == IPPROTO_UDP || inner_iph.protocol == IPPROTO_ICMP) {
-            bpf_printk("[ICMP Filter] Dropped an ICMP_REDIRECT packet from %s!\n", buf);
+            struct log_event event = {
+                .pid = bpf_get_current_pid_tgid() >> 32,
+                .type = 1,
+                .timestamp = cur_stamp,
+            };
+            bpf_probe_read_str(event.ip, sizeof(event.ip), buf);
+            bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
+            bpf_printk("[ICMP Filter] Dropped an ICMP Redirect packet from %s!\n", buf);
             return NF_DROP;
         }
     } else {
@@ -143,7 +170,14 @@ finish:
                 return NF_ACCEPT;
             }
             if (inner_icmph.type == ICMP_ECHOREPLY || inner_icmph.type == ICMP_DEST_UNREACH || inner_icmph.type == ICMP_REDIRECT) {
-                bpf_printk("[ICMP Filter] Dropped an ICMP_REDIRECT packet from %s!\n", buf);
+                struct log_event event = {
+                    .pid = bpf_get_current_pid_tgid() >> 32,
+                    .type = 2,
+                    .timestamp = cur_stamp,
+                };
+                bpf_probe_read_str(event.ip, sizeof(event.ip), buf);
+                bpf_perf_event_output(ctx, &log_map, BPF_F_CURRENT_CPU, &event, sizeof(event));
+                bpf_printk("[ICMP Filter] Dropped an ICMP Fragment Needed packet from %s!\n", buf);
                 return NF_DROP;
             }
         }

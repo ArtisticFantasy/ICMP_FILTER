@@ -24,9 +24,7 @@ int main(int argc, char **argv) {
     char filename[PATH_MAX];
     int ret;
 
-    snprintf(filename, sizeof(filename), "%s", "icmp_filter.o");
-
-    obj = bpf_object__open_file(filename, NULL);
+    obj = bpf_object__open_file("icmp_filter.o", NULL);
     if (libbpf_get_error(obj)) {
         fprintf(stderr, "ERROR: opening BPF object file failed\n");
         return 1;
@@ -41,12 +39,14 @@ int main(int argc, char **argv) {
     prog = bpf_object__find_program_by_name(obj, "icmp_filter");
     if (!prog) {
         fprintf(stderr, "ERROR: finding a program in BPF object file failed\n");
+        bpf_object__close(obj);
         return 1;
     }
 
     int map_fd = bpf_object__find_map_fd_by_name(obj, "hash_key");
     if (map_fd < 0) {
         fprintf(stderr, "ERROR: finding hash_key in BPF object file failed\n");
+        bpf_object__close(obj);
         return 1;
     }
 
@@ -57,6 +57,7 @@ int main(int argc, char **argv) {
     ret = bpf_map_update_elem(map_fd, &key, &value, BPF_ANY);
     if (ret) {
         fprintf(stderr, "ERROR: updating map in BPF object file failed\n");
+        bpf_object__close(obj);
         return 1;
     }
     printf("Set hash key: %u\n", value);
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
     map_fd = bpf_object__find_map_fd_by_name(obj, "icmp_map");
     if (map_fd < 0) {
         fprintf(stderr, "ERROR: finding icmp_map in BPF object file failed\n");
+        bpf_object__close(obj);
         return 1;
     }
 
@@ -76,6 +78,7 @@ int main(int argc, char **argv) {
         ret = bpf_map_update_elem(map_fd, &i, &entry, BPF_ANY);
         if (ret) {
             fprintf(stderr, "ERROR: updating map in BPF object file failed\n");
+            bpf_object__close(obj);
             return 1;
         }
     }
@@ -91,6 +94,7 @@ int main(int argc, char **argv) {
     link = bpf_program__attach_netfilter(prog, &opts);
     if (!link) {
         fprintf(stderr, "ERROR: attaching BPF program to Netfilter hook failed\n");
+        bpf_object__close(obj);
         return 1;
     }
 
@@ -98,10 +102,13 @@ int main(int argc, char **argv) {
     if (ret) {
         fprintf(stderr, "ERROR: pinning BPF link failed\n");
         bpf_link__destroy(link);
+        bpf_object__close(obj);
         return 1;
     }
 
     printf("eBPF program icmp_filter successfully attached to Netfilter hook and pinned\n");
+
+    bpf_object__close(obj);
 
     return 0;
 }
