@@ -7,7 +7,6 @@
 #include <stdint.h>
 
 struct log_event {
-    __u32 pid;
     char ip[256];
     __u8 type;
     __u64 timestamp;

@@ -11,7 +11,6 @@ struct perdst_entry {
 };
 
 struct log_event {
-    __u32 pid;
     char ip[256];
     __u8 type;
     __u64 timestamp;
@@ -133,7 +132,6 @@ int icmp_filter(struct bpf_nf_ctx *ctx) {
 finish: 
     if (drop) {
         struct log_event event = {
-            .pid = bpf_get_current_pid_tgid() >> 32,
             .type = 0,
             .timestamp = cur_stamp,
         };
@@ -155,7 +153,6 @@ finish:
     if (icmph.type == ICMP_REDIRECT) {
         if (inner_iph.protocol == IPPROTO_UDP || inner_iph.protocol == IPPROTO_ICMP) {
             struct log_event event = {
-                .pid = bpf_get_current_pid_tgid() >> 32,
                 .type = 1,
                 .timestamp = cur_stamp,
             };
@@ -171,7 +168,6 @@ finish:
             }
             if (inner_icmph.type == ICMP_ECHOREPLY || inner_icmph.type == ICMP_DEST_UNREACH || inner_icmph.type == ICMP_REDIRECT) {
                 struct log_event event = {
-                    .pid = bpf_get_current_pid_tgid() >> 32,
                     .type = 2,
                     .timestamp = cur_stamp,
                 };
