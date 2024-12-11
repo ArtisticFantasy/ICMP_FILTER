@@ -1,6 +1,7 @@
 #include "vmlinux.h"
 #include "common.h"
 #include <bpf/bpf_helpers.h>
+#include <bpf/bpf_endian.h>
 
 #define ONE_SECOND 1000000000
 struct perdst_entry {
