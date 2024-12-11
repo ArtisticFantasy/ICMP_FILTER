@@ -41,8 +41,8 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __type(key_size, sizeof(__u32));
-    __type(value_size, sizeof(__u32));
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(__u32));
 } log_map SEC(".maps");
 
 __u32 hash_calc (__u32 ip) {
