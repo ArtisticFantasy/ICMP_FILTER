@@ -136,7 +136,6 @@ finish:
         };
         bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
         bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
-        bpf_printk("[ICMP Filter] Dropped an ICMP packet from %s according to rate limit!\n", buf);
         return NF_DROP;
     }
 
@@ -157,7 +156,6 @@ finish:
             };
             bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
             bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
-            bpf_printk("[ICMP Filter] Dropped an ICMP Redirect packet from %s!\n", buf);
             return NF_DROP;
         }
     } else {
@@ -172,7 +170,6 @@ finish:
                 };
                 bpf_probe_read_kernel_str(event.ip, sizeof(event.ip), buf);
                 bpf_ringbuf_output(&log_map, &event, sizeof(event), 0);
-                bpf_printk("[ICMP Filter] Dropped an ICMP Fragment Needed packet from %s!\n", buf);
                 return NF_DROP;
             }
         }

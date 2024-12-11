@@ -15,22 +15,22 @@ INT_FILES := $(BPF_LOADER) $(BPF_LOGGER) $(BPF_PROG).o
 all: $(BPF_LOADER) $(BPF_LOGGER)
 
 $(BPF_LOADER): $(BPF_LOADER).c $(BPF_PROG).o
-	$(CC) $(LOADER_CFLAGS) -o $@ $< $(LOADER_LDFLAGS)
+	@$(CC) $(LOADER_CFLAGS) -o $@ $< $(LOADER_LDFLAGS)
 
 $(BPF_LOGGER): $(BPF_LOGGER).c $(BPF_PROG).o
-	$(CC) $(LOGGER_CFLAGS) -o $@ $< $(LOGGER_LDFLAGS)
+	@$(CC) $(LOGGER_CFLAGS) -o $@ $< $(LOGGER_LDFLAGS)
 
 $(BPF_PROG).o: $(BPF_PROG).c
 	@if ! test -f include/vmlinux.h; then \
 		bpftool btf dump file /sys/kernel/btf/vmlinux format c > include/vmlinux.h || exit 1; \
 	fi
-	$(CC) $(BPF_CFLAGS) -o $@ $^
+	@$(CC) $(BPF_CFLAGS) -o $@ $^
 
 clean:
-	rm -f $(INT_FILES)
+	@rm -f $(INT_FILES)
 
 load: $(BPF_LOADER)
-	sudo ./$(BPF_LOADER)
+	@sudo ./$(BPF_LOADER)
 
 unload:
 	@if sudo test -f /sys/fs/bpf/icmp_filter_link; then \
@@ -46,4 +46,4 @@ log: $(BPF_LOGGER)
 		echo "No log map found!"; \
 		exit 1; \
 	fi
-	sudo ./$(BPF_LOGGER)
+	@sudo ./$(BPF_LOGGER)
