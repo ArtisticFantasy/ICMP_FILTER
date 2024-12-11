@@ -39,7 +39,7 @@ void print_log(struct log_event event) {
     }
 }
 
-void handle_event(void *ctx, void *data, size_t size) {
+int handle_event(void *ctx, void *data, size_t size) {
     print_log(*(struct log_event *)data);
 }
 
