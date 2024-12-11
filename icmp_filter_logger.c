@@ -41,6 +41,7 @@ void print_log(struct log_event event) {
 
 int handle_event(void *ctx, void *data, size_t size) {
     print_log(*(struct log_event *)data);
+    return 0;
 }
 
 int main() {
