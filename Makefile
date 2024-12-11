@@ -5,14 +5,14 @@ LOGGER_CFLAGS := -O2
 LOADER_LDFLAGS := -lbpf
 LOGGER_LDFLAGS := -lbpf
 BPF_LOADER := icmp_filter_loader
-BPF_LOGGER := icmp_filter_loader
+BPF_LOGGER := icmp_filter_logger
 BPF_PROG := icmp_filter
 
-INT_FILES := $(BPF_LOADER) $(BPF_PROG).o
+INT_FILES := $(BPF_LOADER) $(BPF_LOGGER) $(BPF_PROG).o
 
 .PHONY: all clean load unload
 
-all: $(BPF_LOADER)
+all: $(BPF_LOADER) $(BPF_LOGGER)
 
 $(BPF_LOADER): $(BPF_LOADER).c $(BPF_PROG).o
 	$(CC) $(LOADER_CFLAGS) -o $@ $< $(LOADER_LDFLAGS)
@@ -39,3 +39,6 @@ unload:
 	else \
 		echo "Nothing to unload."; \
 	fi
+
+log: $(BPF_LOGGER)
+	sudo ./$(BPF_LOGGER)

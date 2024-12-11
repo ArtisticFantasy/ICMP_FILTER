@@ -4,6 +4,7 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include <time.h>
+#include <stdint.h>
 
 struct log_event {
     __u32 pid;
@@ -12,22 +13,17 @@ struct log_event {
     __u64 timestamp;
 };
 
-void handle_event(void *ctx, int cpu, void *data, __u32 size) {
-    struct event *e = data;
-    printf("CPU: %d, PID: %u, Message: %s\n", cpu, e->pid, e->message);
-}
-
 void print_log(struct log_event event) {
     struct timespec boot_time, real_time;
     clock_gettime(CLOCK_BOOTTIME, &boot_time);
     clock_gettime(CLOCK_REALTIME, &real_time);
 
-    u64 boot_sec = boot_time.tv_sec;
-    u64 real_sec = real_time.tv_sec;
-    u64 offset_sec = real_sec - boot_sec;
+    time_t boot_sec = boot_time.tv_sec;
+    time_t real_sec = real_time.tv_sec;
+    time_t offset_sec = real_sec - boot_sec;
 
     // 将内核时间转换为用户空间时间
-    time_t user_time_sec = event.timestamp/1e9 + offset_sec;
+    time_t user_time_sec = event.timestamp / 1e9 + offset_sec;
 
     struct tm *user_time_tm = localtime(&user_time_sec);
 
@@ -45,9 +41,14 @@ void print_log(struct log_event event) {
     }
 }
 
+void handle_event(void *ctx, int cpu, void *data, __u32 size) {
+    print_log(*(struct log_event *)data);
+}
+
 int main() {
     struct perf_buffer *pb;
     struct perf_buffer_opts pb_opts = {};
+    struct bpf_object *obj;
     int map_fd;
 
     obj = bpf_object__open_file("icmp_filter.o", NULL);
