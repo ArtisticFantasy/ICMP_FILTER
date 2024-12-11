@@ -21,7 +21,6 @@ void print_log(struct log_event event) {
     time_t real_sec = real_time.tv_sec;
     time_t offset_sec = real_sec - boot_sec;
 
-    // 将内核时间转换为用户空间时间
     time_t user_time_sec = event.timestamp / 1e9 + offset_sec;
 
     struct tm *user_time_tm = localtime(&user_time_sec);
@@ -40,7 +39,7 @@ void print_log(struct log_event event) {
     }
 }
 
-void handle_event(void *ctx, int cpu, void *data, __u32 size) {
+void handle_event(void *ctx, void *data, size_t size) {
     print_log(*(struct log_event *)data);
 }
 
