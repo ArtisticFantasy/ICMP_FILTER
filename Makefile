@@ -31,7 +31,12 @@ clean:
 	@rm -f $(INT_FILES)
 
 load: $(BPF_LOADER)
-	@sudo ./$(BPF_LOADER)
+	@if ! sudo test -f /sys/fs/bpf/icmp_filter_link; then \
+		sudo ./$(BPF_LOADER); \
+	else \
+		echo "The BPF program has already been loaded!"; \
+	fi
+	
 
 unload:
 	@if sudo test -f /sys/fs/bpf/icmp_filter_link; then \
@@ -45,6 +50,6 @@ unload:
 log: $(BPF_LOGGER)
 	@if ! sudo test -f /sys/fs/bpf/icmp_filter_log_map; then \
 		echo "No log map found! Please run 'make load' first!"; \
-		exit 1; \
+	else \
+		sudo ./$(BPF_LOGGER); \
 	fi
-	@sudo ./$(BPF_LOGGER)
